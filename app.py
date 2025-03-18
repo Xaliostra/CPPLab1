@@ -3,6 +3,10 @@ from flask_cors import CORS
 import requests
 import os
 from dotenv import load_dotenv
+import logging
+
+# Настройка логирования
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # Загрузка переменных окружения
 load_dotenv()
@@ -30,6 +34,7 @@ def analyze_image(image_url):
         json=data,
         headers=headers,
     )
+    response.raise_for_status()  # Проверка статус кода
     return response.json()
 
 # Генерация рецепта
@@ -45,29 +50,53 @@ def generate_recipe(ingredients):
         json=data,
         headers=headers,
     )
+    response.raise_for_status()  # Проверка статус кода
     return response.json()
 
 # Маршрут для загрузки изображения
 @app.route("/upload", methods=["POST"])
 def upload_image():
-    if "image" not in request.files:
-        return jsonify({"error": "No image provided"}), 400
-
-    file = request.files["image"]
-    file_path = os.path.join(UPLOAD_FOLDER, file.filename)
-    file.save(file_path)
-
-    # Анализ изображения
     try:
-        tags = analyze_image(file_path)
-        ingredients = [tag["name"] for tag in tags["tags"] if tag["confidence"] > 0.7]
+        if "image" not in request.files:
+            return jsonify({"error": "No image provided"}), 400
 
-        # Генерация рецепта
-        recipe = generate_recipe(ingredients)
+        file = request.files["image"]
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
 
-        return jsonify({"ingredients": ingredients, "recipe": recipe["choices"][0]["text"]})
+        # Валидация типа файла (пример)
+        if not file.filename.lower().endswith(('.png', '.jpg', '.jpeg')):
+            return jsonify({"error": "Invalid file type"}), 400
+
+        file_path = os.path.join(UPLOAD_FOLDER, file.filename)
+        file.save(file_path)
+
+        tags_response = analyze_image(file_path)
+        if "tags" not in tags_response:
+            return jsonify({"error": "Failed to analyze image"}), 500
+
+        ingredients = [tag["name"] for tag in tags_response["tags"] if tag["confidence"] > 0.7]
+
+        if not ingredients:
+            return jsonify({"error": "No ingredients found"}), 400
+
+        recipe_response = generate_recipe(ingredients)
+        if "choices" not in recipe_response:
+            return jsonify({"error": "Failed to generate recipe"}), 500
+
+        return jsonify({"ingredients": ingredients, "recipe": recipe_response["choices"][0]["text"]})
+
+    except requests.exceptions.RequestException as e:
+        app.logger.error(f"API request failed: {e}")
+        return jsonify({"error": "API request failed"}), 500
+
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        app.logger.error(f"Error processing image: {e}")
+        return jsonify({"error": "An error occurred"}), 500
+
+    finally:
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 # Запуск приложения
 if __name__ == "__main__":
