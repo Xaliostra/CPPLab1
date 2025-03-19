@@ -4,7 +4,8 @@ import requests
 import os
 from dotenv import load_dotenv
 import logging
-import traceback  # Добавляем импорт traceback
+import traceback
+from azure.storage.blob import BlobServiceClient
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -34,6 +35,25 @@ if not os.path.exists(UPLOAD_FOLDER):
     os.makedirs(UPLOAD_FOLDER)
     logger.info(f"Created upload folder: {UPLOAD_FOLDER}")
 
+# Загрузка изображения в Blob Storage
+def upload_to_blob_storage(file_path, file_name):
+    try:
+        connection_string = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
+        container_name = os.getenv("AZURE_STORAGE_CONTAINER_NAME")
+
+        blob_service_client = BlobServiceClient.from_connection_string(connection_string)
+        blob_client = blob_service_client.get_blob_client(container=container_name, blob=file_name)
+
+        with open(file_path, "rb") as data:
+            blob_client.upload_blob(data)
+
+        return blob_client.url
+
+    except Exception as e:
+        logger.error(f"Error uploading to Blob Storage: {e}")
+        logger.error(traceback.format_exc())
+        raise
+
 # Обработка изображений
 def analyze_image(image_url):
     logger.info(f"Analyzing image: {image_url}")
@@ -50,7 +70,7 @@ def analyze_image(image_url):
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"Vision API request failed: {e}")
-        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}") #Добавлено логирование текста ответа
+        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}")
         raise
 
 # Генерация рецепта
@@ -73,13 +93,13 @@ def generate_recipe(ingredients):
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"OpenAI API request failed: {e}")
-        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}") #Добавлено логирование текста ответа
+        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}")
         raise
 
 # Маршрут для загрузки изображения
 @app.route("/upload", methods=["POST"])
 def upload_image():
-    file_path = None #Добавлено определение file_path заранее.
+    file_path = None
     try:
         logger.info("Received image upload request")
         if "image" not in request.files:
@@ -100,7 +120,10 @@ def upload_image():
         file.save(file_path)
         logger.info(f"Saved file to: {file_path}")
 
-        tags_response = analyze_image(file_path)
+        blob_url = upload_to_blob_storage(file_path, file.filename)
+        logger.info(f"Uploaded to Blob Storage: {blob_url}")
+
+        tags_response = analyze_image(blob_url)
         if "tags" not in tags_response:
             logger.error("Failed to analyze image")
             return jsonify({"error": "Failed to analyze image"}), 500
@@ -122,16 +145,16 @@ def upload_image():
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API request failed: {e}")
-        logger.error(traceback.format_exc()) #Добавлено логирование traceback
+        logger.error(traceback.format_exc())
         return jsonify({"error": "API request failed"}), 500
 
     except Exception as e:
         logger.error(f"Error processing image: {e}")
-        logger.error(traceback.format_exc()) #Добавлено логирование traceback
+        logger.error(traceback.format_exc())
         return jsonify({"error": "An error occurred"}), 500
 
     finally:
-        if file_path and os.path.exists(file_path): #Добавлена проверка file_path
+        if file_path and os.path.exists(file_path):
             os.remove(file_path)
             logger.info(f"Removed file: {file_path}")
 
