@@ -4,6 +4,7 @@ import requests
 import os
 from dotenv import load_dotenv
 import logging
+import traceback  # Добавляем импорт traceback
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -48,7 +49,8 @@ def analyze_image(image_url):
         logger.info(f"Vision API response: {response.status_code}")
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"Vision API request failed: {e}, response: {response.text if 'response' in locals() else 'No response'}")
+        logger.error(f"Vision API request failed: {e}")
+        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}") #Добавлено логирование текста ответа
         raise
 
 # Генерация рецепта
@@ -70,12 +72,14 @@ def generate_recipe(ingredients):
         logger.info(f"OpenAI API response: {response.status_code}")
         return response.json()
     except requests.exceptions.RequestException as e:
-        logger.error(f"OpenAI API request failed: {e}, response: {response.text if 'response' in locals() else 'No response'}")
+        logger.error(f"OpenAI API request failed: {e}")
+        logger.error(f"Response text: {response.text if 'response' in locals() else 'No response'}") #Добавлено логирование текста ответа
         raise
 
 # Маршрут для загрузки изображения
 @app.route("/upload", methods=["POST"])
 def upload_image():
+    file_path = None #Добавлено определение file_path заранее.
     try:
         logger.info("Received image upload request")
         if "image" not in request.files:
@@ -118,14 +122,16 @@ def upload_image():
 
     except requests.exceptions.RequestException as e:
         logger.error(f"API request failed: {e}")
+        logger.error(traceback.format_exc()) #Добавлено логирование traceback
         return jsonify({"error": "API request failed"}), 500
 
     except Exception as e:
         logger.error(f"Error processing image: {e}")
+        logger.error(traceback.format_exc()) #Добавлено логирование traceback
         return jsonify({"error": "An error occurred"}), 500
 
     finally:
-        if os.path.exists(file_path):
+        if file_path and os.path.exists(file_path): #Добавлена проверка file_path
             os.remove(file_path)
             logger.info(f"Removed file: {file_path}")
 
