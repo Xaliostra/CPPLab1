@@ -3,8 +3,10 @@ import uuid
 import requests
 from flask import Flask, request, jsonify
 from azure.storage.blob import BlobServiceClient
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app, origins=["https://lively-coast-073979f0f.6.azurestaticapps.net"])
 
 # Конфигурация Azure
 AZURE_STORAGE_CONNECTION_STRING = os.getenv("AZURE_STORAGE_CONNECTION_STRING")
