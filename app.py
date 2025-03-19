@@ -17,6 +17,7 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Разрешение запросов от всех источников
 
+#a
 # Настройки API
 VISION_API_KEY = os.getenv("VISION_API_KEY")
 VISION_ENDPOINT = os.getenv("VISION_ENDPOINT")
