@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 import logging
 import traceback
 from azure.storage.blob import BlobServiceClient
+import time
 
 # Настройка логирования
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -17,7 +18,6 @@ load_dotenv()
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "*"}})  # Разрешение запросов от всех источников
 
-#a
 # Настройки API
 VISION_API_KEY = os.getenv("VISION_API_KEY")
 VISION_ENDPOINT = os.getenv("VISION_ENDPOINT")
@@ -57,7 +57,8 @@ def upload_to_blob_storage(file_path, file_name):
 
 # Обработка изображений
 def analyze_image(image_url):
-    logger.info(f"Analyzing image: {image_url}")
+    logger.info(f"Начало анализа изображения: {image_url}")
+    start_time = time.time()
     headers = {"Ocp-Apim-Subscription-Key": VISION_API_KEY}
     data = {"url": image_url}
     try:
@@ -66,8 +67,12 @@ def analyze_image(image_url):
             json=data,
             headers=headers,
         )
-        response.raise_for_status()  # Проверка статус кода
+        response.raise_for_status()
+        logger.debug(f"Vision API request data: {data}")
+        logger.debug(f"Vision API response: {response.json()}")
         logger.info(f"Vision API response: {response.status_code}")
+        end_time = time.time()
+        logger.info(f"Время выполнения Vision API: {end_time - start_time} секунд")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"Vision API request failed: {e}")
@@ -77,6 +82,7 @@ def analyze_image(image_url):
 # Генерация рецепта
 def generate_recipe(ingredients):
     logger.info(f"Generating recipe for ingredients: {ingredients}")
+    start_time = time.time()
     prompt = f"Generate a recipe using these ingredients: {', '.join(ingredients)}"
     headers = {
         "Content-Type": "application/json",
@@ -89,8 +95,12 @@ def generate_recipe(ingredients):
             json=data,
             headers=headers,
         )
-        response.raise_for_status()  # Проверка статус кода
+        response.raise_for_status()
+        logger.debug(f"OpenAI API request data: {data}")
+        logger.debug(f"OpenAI API response: {response.json()}")
         logger.info(f"OpenAI API response: {response.status_code}")
+        end_time = time.time()
+        logger.info(f"Время выполнения OpenAI API: {end_time - start_time} секунд")
         return response.json()
     except requests.exceptions.RequestException as e:
         logger.error(f"OpenAI API request failed: {e}")
