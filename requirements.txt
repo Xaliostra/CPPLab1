@@ -1,4 +1,5 @@
 Flask
+Flask-Cors
 requests
 python-dotenv
-flask-cors
+azure-storage-blob
